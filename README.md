@@ -10,6 +10,11 @@ graph LR
     Server <--> DB[(SurrealDB)]
     Server <--> Embed[Embedding Model]
     Server <--> NLI[NLI Model]
+
+    subgraph Web Dashboard
+        API[GraphQL API] --> Server
+        UI[Next.js Frontend] --> API
+    end
 ```
 
 ## How It Works
@@ -33,6 +38,18 @@ graph TB
 ```
 
 Entities store content with vector embeddings for semantic search. Relations create a traversable graph. Search combines BM25 keyword matching with cosine similarity for hybrid retrieval.
+
+## Features
+
+- **Semantic Memory**: Store entities with vector embeddings for semantic search
+- **Episodic Memory**: Complete conversation sessions with timestamps
+- **Procedural Memory**: Step-by-step workflows and processes
+- **Knowledge Graph**: Typed relations between entities with traversal and path finding
+- **Hybrid Search**: Combined BM25 keyword + vector similarity search
+- **Contradiction Detection**: NLI-based detection of conflicting information
+- **Context Isolation**: Project-level namespacing (auto-detected from git remote)
+- **Memory Decay**: Temporal weighting for relevance scoring
+- **Web Dashboard**: Next.js frontend with GraphQL API for visual exploration
 
 ## Tools
 
@@ -82,19 +99,56 @@ Entities store content with vector embeddings for semantic search. Relations cre
 | `reflect` | Decay old memories, find duplicates, recalculate importance |
 | `check_contradictions` | Detect conflicting information using NLI |
 
+## Entity Types
+
+memcp supports typed entities for better organization:
+
+| Type | Description |
+|------|-------------|
+| `concept` | General knowledge or idea |
+| `fact` | Verified piece of information |
+| `preference` | User preference or choice |
+| `requirement` | Requirement or constraint |
+| `decision` | Decision that was made |
+| `person` | A person |
+| `organization` | Company, team, or group |
+| `location` | Physical or virtual location |
+| `event` | Something that happened at a specific time |
+| `tool` | Software tool or technology |
+| `project` | A project or initiative |
+| `code` | Code snippet or technical implementation |
+| `procedure` | Step-by-step workflow |
+| `step` | Single step within a procedure |
+
 ## Installation
 
+### With pip/uv
+
 ```bash
-# Install with uv/pip
+# Install with uv
 uv pip install memcp
 
-# Or run directly with uvx
+# Or with pip
+pip install memcp
+```
+
+### Run directly with uvx
+
+```bash
 uvx memcp
+```
+
+### From source
+
+```bash
+git clone https://github.com/raphaelgruber/memcp
+cd memcp
+uv pip install -e .
 ```
 
 ## Configuration
 
-Environment variables:
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -103,8 +157,13 @@ Environment variables:
 | `SURREALDB_DATABASE` | `graph` | Database name |
 | `SURREALDB_USER` | `root` | Username |
 | `SURREALDB_PASS` | `root` | Password |
+| `SURREALDB_AUTH_LEVEL` | `root` | Auth scope (root or database) |
 | `MEMCP_DEFAULT_CONTEXT` | - | Default project context for all operations |
 | `MEMCP_CONTEXT_FROM_CWD` | `false` | Auto-detect context from working directory |
+| `MEMCP_ALLOW_CUSTOM_TYPES` | `true` | Allow entity types beyond predefined ones |
+| `MEMCP_QUERY_TIMEOUT` | `30` | Query timeout in seconds |
+| `MEMCP_LOG_FILE` | `/tmp/memcp.log` | Log file path |
+| `MEMCP_LOG_LEVEL` | `INFO` | Logging level |
 
 ## Claude Desktop Config
 
@@ -121,6 +180,84 @@ Environment variables:
   }
 }
 ```
+
+## Docker
+
+### Docker Compose (Recommended)
+
+The easiest way to run memcp with SurrealDB:
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- **SurrealDB** on port 8000
+- **memcp Dashboard** on port 3000 (Next.js frontend + GraphQL API)
+
+### Dockerfile
+
+Build and run the container manually:
+
+```bash
+# Build
+docker build -t memcp .
+
+# Run
+docker run -p 3000:3000 -p 8080:8080 \
+  -e SURREALDB_URL=ws://host.docker.internal:8000/rpc \
+  memcp
+```
+
+The container runs:
+- **Port 3000**: Next.js web dashboard
+- **Port 8080**: FastAPI GraphQL API
+
+## Kubernetes
+
+Deploy with Helm:
+
+```bash
+# Add values as needed
+helm install memcp ./helm/memcp \
+  --set surrealdb.url=ws://surrealdb:8000/rpc \
+  --set surrealdb.user=root \
+  --set surrealdb.pass=your-password
+```
+
+See `helm/memcp/values.yaml` for all configuration options.
+
+## Web Dashboard
+
+The web dashboard provides a visual interface for exploring and managing your knowledge graph.
+
+### Features
+- Entity search and browsing
+- Graph visualization
+- Episode and procedure management
+- Maintenance tools (reflect, contradiction detection)
+- Real-time statistics
+
+### Running the Dashboard
+
+```bash
+# Install webui dependencies
+uv pip install -e ".[webui]"
+
+# Start the GraphQL API
+uvicorn memcp.api.main:app --port 8080
+
+# In another terminal, start the Next.js frontend
+cd dashboard
+npm install
+npm run dev
+```
+
+The dashboard will be available at http://localhost:3000
+
+### GraphQL API
+
+The GraphQL API is available at `http://localhost:8080/graphql` with a built-in GraphiQL explorer.
 
 ## Models Used
 
@@ -223,3 +360,50 @@ Environment variables:
 "Show me the testing workflow"
 → get_procedure(procedure_id: "testing-workflow")
 ```
+
+## Development
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+uv pip install -e ".[dev]"
+
+# Run tests (requires SurrealDB running)
+pytest
+
+# Run only unit tests (no SurrealDB required)
+pytest -m "not integration"
+```
+
+### Project Structure
+
+```
+memcp/
+├── memcp/                 # Core Python package
+│   ├── server.py          # Main MCP server
+│   ├── db.py              # Database layer & queries
+│   ├── models.py          # Pydantic models
+│   ├── servers/           # Modular tool servers
+│   │   ├── search.py
+│   │   ├── persist.py
+│   │   ├── graph.py
+│   │   ├── episode.py
+│   │   ├── procedure.py
+│   │   └── maintenance.py
+│   ├── api/               # GraphQL API
+│   │   ├── main.py
+│   │   └── schema.py
+│   └── utils/
+│       ├── embedding.py   # ML models
+│       └── logging.py
+├── dashboard/             # Next.js frontend
+├── helm/                  # Kubernetes Helm chart
+├── Dockerfile
+├── docker-compose.yml
+└── pyproject.toml
+```
+
+## License
+
+MIT
